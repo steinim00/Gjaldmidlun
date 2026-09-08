@@ -106,13 +106,44 @@ cd frontend
 python3 -m http.server 5500
 ```
 
-Opnaðu síðan `http://localhost:5500` í vafra. Ef bakendinn keyrir á öðru
-vistfangi en `http://localhost:8000`, má stilla það með því að setja
-eftirfarandi í `<head>` á `index.html` áður en `<script>` keyrir:
+Opnaðu síðan `http://localhost:5500` í vafra. Til að tengja hana við
+lifandi bakenda (t.d. þann sem keyrir á `http://localhost:8000` hér að
+ofan) skal setja eftirfarandi í `<head>` á `index.html` áður en
+`<script>` keyrir:
 
 ```html
 <script>window.API_BASE_URL = "http://localhost:8000";</script>
 ```
+
+Ef `API_BASE_URL` er ekki stillt les síðan í staðinn úr `rates.json` í
+sömu möppu (sjá næsta kafla um GitHub Pages).
+
+## Útgáfa á GitHub Pages
+
+GitHub Pages hýsir eingöngu kyrrstæðar skrár, svo bakendinn (FastAPI) getur
+ekki keyrt þar. Til að birta síðuna samt á Pages er notuð eftirfarandi
+lausn:
+
+- Vinnuferli í GitHub Actions (`.github/workflows/deploy-pages.yml`) keyrir
+  á klukkutíma fresti (og við hverja `push` á `main`). Það sækir núverandi
+  gengi með `scripts/fetch_rates.py` og býr til `frontend/rates.json`.
+- Forsíðan les sjálfkrafa úr `rates.json` þegar `window.API_BASE_URL` er
+  ekki stillt, og reiknar umreikninga í vafranum út frá vistuðu gengi.
+  Þannig þarf enginn lifandi bakendi að keyra fyrir Pages-útgáfuna, og
+  Visa-lyklarnir fara aldrei í vafra notandans.
+- Þegar `API_BASE_URL` er stillt (t.d. með sjálfhýstum bakenda) notar
+  síðan þess í stað `GET /fx/all` og `POST /fx/convert` í rauntíma, eins og
+  lýst er hér að ofan.
+
+### Uppsetning
+
+1. Í `Settings → Secrets and variables → Actions` fyrir GitHub-safnið skal
+   bæta við leynilyklunum `VISA_API_KEY`, `VISA_SHARED_SECRET` og
+   `VISA_BASE_URL` (sömu gildi og í `.env`).
+2. Í `Settings → Pages` skal velja **Source: GitHub Actions**.
+3. Keyra vinnuferlið handvirkt í fyrsta sinn (`Actions → Deploy Pages → Run
+   workflow`), eða einfaldlega `push`-a á `main` – þá keyrir það sjálfkrafa.
+4. Síðan birtist á slóðinni sem GitHub Pages úthlutar safninu.
 
 ## Umhverfisbreytur
 
