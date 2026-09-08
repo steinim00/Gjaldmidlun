@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="is">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gjaldmiðlun – Gengi krónunnar</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card-bg: #ffffff;
+    --text: #1a1d23;
+    --muted: #6b7280;
+    --accent: #1d4ed8;
+    --border: #e2e5ea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 2rem 1rem;
+  }
+  .container {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 0.25rem;
+  }
+  p.subtitle {
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 2rem;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .card h2 {
+    font-size: 1.1rem;
+    margin-top: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  .converter-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  label {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  input, select {
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: var(--card-bg);
+    color: var(--text);
+  }
+  .result {
+    margin-top: 1rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+  .error {
+    color: #b91c1c;
+    font-size: 0.9rem;
+  }
+  .status {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 2rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Gjaldmiðlun</h1>
+  <p class="subtitle">Gengi íslensku krónunnar (ISK) gagnvart helstu gjaldmiðlum, byggt á gengi Visa.</p>
+
+  <div class="card">
+    <h2>Gengistafla (1.000 ISK)</h2>
+    <div id="table-status" class="status">Sæki gengi...</div>
+    <table id="rates-table" style="display:none;">
+      <thead>
+        <tr>
+          <th>Gjaldmiðill</th>
+          <th>Þú færð fyrir 1.000 ISK</th>
+          <th>Gengi</th>
+        </tr>
+      </thead>
+      <tbody id="rates-body"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Reiknivél</h2>
+    <div class="converter-row">
+      <div class="field">
+        <label for="amount">Upphæð í ISK</label>
+        <input type="number" id="amount" value="1000" min="1" step="1">
+      </div>
+      <div class="field">
+        <label for="currency">Gjaldmiðill</label>
+        <select id="currency"></select>
+      </div>
+    </div>
+    <div id="convert-result" class="result"></div>
+    <div id="convert-error" class="error"></div>
+  </div>
+
+  <footer>Gengisupplýsingar frá Visa Foreign Exchange Rates API. Aðeins til viðmiðunar.</footer>
+</div>
+
+<script>
+  const API_BASE = window.API_BASE_URL || "http://localhost:8000";
+
+  const currencyNames = {
+    USD: "Bandaríkjadalur",
+    EUR: "Evra",
+    GBP: "Sterlingspund",
+    DKK: "Dönsk króna",
+    NOK: "Norsk króna",
+    SEK: "Sænsk króna",
+    CAD: "Kanadadalur",
+    JPY: "Japanskt jen",
+  };
+
+  let latestRates = [];
+
+  function formatNumber(value, digits) {
+    return new Intl.NumberFormat("is-IS", {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(value);
+  }
+
+  async function loadRatesTable() {
+    const statusEl = document.getElementById("table-status");
+    const tableEl = document.getElementById("rates-table");
+    const bodyEl = document.getElementById("rates-body");
+
+    try {
+      const response = await fetch(`${API_BASE}/fx/all?source_amount=1000`);
+      if (!response.ok) {
+        throw new Error(`Villa frá þjónustu (${response.status})`);
+      }
+      const data = await response.json();
+      latestRates = data;
+
+      bodyEl.innerHTML = "";
+      data.forEach((item) => {
+        const row = document.createElement("tr");
+        if (item.error) {
+          row.innerHTML = `
+            <td>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
+            <td colspan="2" class="error">Ekki tókst að sækja gengi</td>
+          `;
+        } else {
+          row.innerHTML = `
+            <td>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
+            <td>${formatNumber(item.destination_amount, 2)}</td>
+            <td>${formatNumber(item.conversion_rate, 6)}</td>
+          `;
+        }
+        bodyEl.appendChild(row);
+      });
+
+      statusEl.style.display = "none";
+      tableEl.style.display = "table";
+      populateCurrencySelect(data);
+    } catch (err) {
+      statusEl.textContent = `Ekki tókst að sækja gengi: ${err.message}`;
+    }
+  }
+
+  function populateCurrencySelect(data) {
+    const select = document.getElementById("currency");
+    if (select.options.length > 0) return;
+    data.forEach((item) => {
+      const opt = document.createElement("option");
+      opt.value = item.destination_currency;
+      opt.textContent = `${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}`;
+      select.appendChild(opt);
+    });
+  }
+
+  async function convert() {
+    const amountInput = document.getElementById("amount");
+    const currencySelect = document.getElementById("currency");
+    const resultEl = document.getElementById("convert-result");
+    const errorEl = document.getElementById("convert-error");
+
+    resultEl.textContent = "";
+    errorEl.textContent = "";
+
+    const amount = parseFloat(amountInput.value);
+    const currency = currencySelect.value;
+
+    if (!amount || amount <= 0 || !currency) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/fx/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          destination_currency: currency,
+          source_amount: amount,
+        }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Villa (${response.status})`);
+      }
+
+      const data = await response.json();
+      resultEl.textContent = `${formatNumber(amount, 0)} ISK = ${formatNumber(data.destination_amount, 2)} ${data.destination_currency}`;
+    } catch (err) {
+      errorEl.textContent = `Villa við umreikning: ${err.message}`;
+    }
+  }
+
+  document.getElementById("amount").addEventListener("input", convert);
+  document.getElementById("currency").addEventListener("change", convert);
+
+  loadRatesTable().then(() => convert());
+</script>
+</body>
+</html>
