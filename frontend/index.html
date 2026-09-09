@@ -116,6 +116,7 @@
   <div class="card">
     <h2>Gengistafla (1.000 ISK)</h2>
     <div id="table-status" class="status">Sæki gengi...</div>
+    <div id="table-updated" class="status" style="display:none;"></div>
     <table id="rates-table" style="display:none;">
       <thead>
         <tr>
@@ -148,7 +149,11 @@
 </div>
 
 <script>
-  const API_BASE = window.API_BASE_URL || "http://localhost:8000";
+  // If API_BASE_URL is set, the page talks to a live backend (GET /fx/all,
+  // POST /fx/convert) — see README for self-hosting. Otherwise it falls back
+  // to the static rates.json snapshot that the GitHub Pages deploy workflow
+  // refreshes hourly, and computes conversions client-side from that rate.
+  const API_BASE = window.API_BASE_URL || null;
 
   const currencyNames = {
     USD: "Bandaríkjadalur",
@@ -172,15 +177,31 @@
 
   async function loadRatesTable() {
     const statusEl = document.getElementById("table-status");
+    const updatedEl = document.getElementById("table-updated");
     const tableEl = document.getElementById("rates-table");
     const bodyEl = document.getElementById("rates-body");
 
     try {
-      const response = await fetch(`${API_BASE}/fx/all?source_amount=1000`);
-      if (!response.ok) {
-        throw new Error(`Villa frá þjónustu (${response.status})`);
+      let data;
+      if (API_BASE) {
+        const response = await fetch(`${API_BASE}/fx/all?source_amount=1000`);
+        if (!response.ok) {
+          throw new Error(`Villa frá þjónustu (${response.status})`);
+        }
+        data = await response.json();
+      } else {
+        const response = await fetch("./rates.json", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Villa frá þjónustu (${response.status})`);
+        }
+        const payload = await response.json();
+        data = payload.rates;
+        if (payload.generated_at) {
+          const updated = new Date(payload.generated_at);
+          updatedEl.textContent = `Síðast uppfært: ${updated.toLocaleString("is-IS")}`;
+          updatedEl.style.display = "block";
+        }
       }
-      const data = await response.json();
       latestRates = data;
 
       bodyEl.innerHTML = "";
@@ -237,22 +258,31 @@
     }
 
     try {
-      const response = await fetch(`${API_BASE}/fx/convert`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          destination_currency: currency,
-          source_amount: amount,
-        }),
-      });
+      if (API_BASE) {
+        const response = await fetch(`${API_BASE}/fx/convert`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            destination_currency: currency,
+            source_amount: amount,
+          }),
+        });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || `Villa (${response.status})`);
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.detail || `Villa (${response.status})`);
+        }
+
+        const data = await response.json();
+        resultEl.textContent = `${formatNumber(amount, 0)} ISK = ${formatNumber(data.destination_amount, 2)} ${data.destination_currency}`;
+      } else {
+        const item = latestRates.find((r) => r.destination_currency === currency);
+        if (!item || item.error || item.conversion_rate == null) {
+          throw new Error("Gengi ekki tiltækt fyrir þennan gjaldmiðil");
+        }
+        const destinationAmount = amount * item.conversion_rate;
+        resultEl.textContent = `${formatNumber(amount, 0)} ISK = ${formatNumber(destinationAmount, 2)} ${currency}`;
       }
-
-      const data = await response.json();
-      resultEl.textContent = `${formatNumber(amount, 0)} ISK = ${formatNumber(data.destination_amount, 2)} ${data.destination_currency}`;
     } catch (err) {
       errorEl.textContent = `Villa við umreikning: ${err.message}`;
     }

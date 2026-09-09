@@ -1,0 +1,62 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write Visa client certificate
+        run: |
+          mkdir -p certs
+          printf '%s' "${{ secrets.VISA_CLIENT_CERT }}" > certs/visa_cert.pem
+          printf '%s' "${{ secrets.VISA_CLIENT_KEY }}" > certs/visa_private_key.pem
+
+      - name: Fetch latest FX rates
+        run: python scripts/fetch_rates.py
+        env:
+          VISA_USER_ID: ${{ secrets.VISA_USER_ID }}
+          VISA_PASSWORD: ${{ secrets.VISA_PASSWORD }}
+          VISA_CLIENT_CERT_PATH: certs/visa_cert.pem
+          VISA_CLIENT_KEY_PATH: certs/visa_private_key.pem
+          VISA_BASE_URL: ${{ secrets.VISA_BASE_URL }}
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
