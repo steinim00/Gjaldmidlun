@@ -92,6 +92,36 @@
     font-size: 1.15rem;
     font-weight: 600;
   }
+  .result .pre-tax {
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .flag {
+    margin-right: 0.35rem;
+  }
+  .tax-row {
+    display: none;
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border);
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .tax-row.visible {
+    display: flex;
+  }
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding-bottom: 0.55rem;
+  }
+  .checkbox-field label {
+    color: var(--text);
+    font-size: 0.95rem;
+  }
   .error {
     color: #b91c1c;
     font-size: 0.9rem;
@@ -114,6 +144,32 @@
   <p class="subtitle">Gengi íslensku krónunnar (ISK) gagnvart helstu gjaldmiðlum, byggt á gengi Visa.</p>
 
   <div class="card">
+    <h2>Reiknivél</h2>
+    <div class="converter-row">
+      <div class="field">
+        <label for="amount">Upphæð í ISK</label>
+        <input type="number" id="amount" value="1000" min="1" step="1">
+      </div>
+      <div class="field">
+        <label for="currency">Gjaldmiðill</label>
+        <select id="currency"></select>
+      </div>
+    </div>
+    <div id="tax-row" class="tax-row">
+      <div class="checkbox-field">
+        <input type="checkbox" id="tax-enabled">
+        <label for="tax-enabled">Bæta við sölu-/virðisaukaskatti</label>
+      </div>
+      <div class="field">
+        <label for="tax-region" id="tax-region-label">Fylki/hérað</label>
+        <select id="tax-region"></select>
+      </div>
+    </div>
+    <div id="convert-result" class="result"></div>
+    <div id="convert-error" class="error"></div>
+  </div>
+
+  <div class="card">
     <h2>Gengistafla (1.000 ISK)</h2>
     <div id="table-status" class="status">Sæki gengi...</div>
     <div id="table-updated" class="status" style="display:none;"></div>
@@ -129,23 +185,7 @@
     </table>
   </div>
 
-  <div class="card">
-    <h2>Reiknivél</h2>
-    <div class="converter-row">
-      <div class="field">
-        <label for="amount">Upphæð í ISK</label>
-        <input type="number" id="amount" value="1000" min="1" step="1">
-      </div>
-      <div class="field">
-        <label for="currency">Gjaldmiðill</label>
-        <select id="currency"></select>
-      </div>
-    </div>
-    <div id="convert-result" class="result"></div>
-    <div id="convert-error" class="error"></div>
-  </div>
-
-  <footer>Gengisupplýsingar frá Visa Foreign Exchange Rates API. Aðeins til viðmiðunar.</footer>
+  <footer>Gengisupplýsingar frá Visa Foreign Exchange Rates API. Aðeins til viðmiðunar. Skatthlutföll eru grunnhlutföll í hverju fylki/héraði og geta verið hærri vegna staðbundinna álagna.</footer>
 </div>
 
 <script>
@@ -164,6 +204,68 @@
     SEK: "Sænsk króna",
     CAD: "Kanadadalur",
     JPY: "Japanskt jen",
+  };
+
+  const currencyFlags = {
+    USD: "🇺🇸",
+    EUR: "🇪🇺",
+    GBP: "🇬🇧",
+    DKK: "🇩🇰",
+    NOK: "🇳🇴",
+    SEK: "🇸🇪",
+    CAD: "🇨🇦",
+    JPY: "🇯🇵",
+  };
+
+  // Base state/province sales-tax rates (%). US rates are state-level only —
+  // local county/city taxes can push the real rate higher. Canadian rates
+  // combine GST with any provincial sales tax or HST.
+  const taxRegions = {
+    USD: {
+      label: "Fylki",
+      rates: {
+        AL: 4.0, AK: 0.0, AZ: 5.6, AR: 6.5, CA: 7.25, CO: 2.9, CT: 6.35,
+        DE: 0.0, FL: 6.0, GA: 4.0, HI: 4.0, ID: 6.0, IL: 6.25, IN: 7.0,
+        IA: 6.0, KS: 6.5, KY: 6.0, LA: 4.45, ME: 5.5, MD: 6.0, MA: 6.25,
+        MI: 6.0, MN: 6.875, MS: 7.0, MO: 4.225, MT: 0.0, NE: 5.5, NV: 6.85,
+        NH: 0.0, NJ: 6.625, NM: 4.875, NY: 4.0, NC: 4.75, ND: 5.0, OH: 5.75,
+        OK: 4.5, OR: 0.0, PA: 6.0, RI: 7.0, SC: 6.0, SD: 4.2, TN: 7.0,
+        TX: 6.25, UT: 4.85, VT: 6.0, VA: 5.3, WA: 6.5, WV: 6.0, WI: 5.0,
+        WY: 4.0, DC: 6.0,
+      },
+      names: {
+        AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas",
+        CA: "Kalifornía", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
+        FL: "Flórída", GA: "Georgía", HI: "Hawaii", ID: "Idaho",
+        IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas",
+        KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+        MA: "Massachusetts", MI: "Michigan", MN: "Minnesota",
+        MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska",
+        NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey",
+        NM: "New Mexico", NY: "New York", NC: "Norður-Karólína",
+        ND: "Norður-Dakóta", OH: "Ohio", OK: "Oklahoma", OR: "Oregon",
+        PA: "Pennsylvanía", RI: "Rhode Island", SC: "Suður-Karólína",
+        SD: "Suður-Dakóta", TN: "Tennessee", TX: "Texas", UT: "Utah",
+        VT: "Vermont", VA: "Virginía", WA: "Washington",
+        WV: "Vestur-Virginía", WI: "Wisconsin", WY: "Wyoming",
+        DC: "Washington D.C.",
+      },
+    },
+    CAD: {
+      label: "Fylki/hérað",
+      rates: {
+        AB: 5.0, BC: 12.0, MB: 12.0, NB: 15.0, NL: 15.0, NT: 5.0,
+        NS: 14.0, NU: 5.0, ON: 13.0, PE: 15.0, QC: 14.975, SK: 11.0,
+        YT: 5.0,
+      },
+      names: {
+        AB: "Alberta", BC: "Bresku Kólumbía", MB: "Manitoba",
+        NB: "Nýja Brúnsvík", NL: "Nýfundnaland og Labrador",
+        NT: "Norðvesturhéruðin", NS: "Nova Scotia", NU: "Nunavut",
+        ON: "Ontario", PE: "Prince Edward Island", QC: "Québec",
+        SK: "Saskatchewan", YT: "Yukon",
+      },
+    },
   };
 
   let latestRates = [];
@@ -206,15 +308,16 @@
 
       bodyEl.innerHTML = "";
       data.forEach((item) => {
+        const flag = currencyFlags[item.destination_currency] || "";
         const row = document.createElement("tr");
         if (item.error) {
           row.innerHTML = `
-            <td>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
+            <td><span class="flag">${flag}</span>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
             <td colspan="2" class="error">Ekki tókst að sækja gengi</td>
           `;
         } else {
           row.innerHTML = `
-            <td>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
+            <td><span class="flag">${flag}</span>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
             <td>${formatNumber(item.destination_amount, 2)}</td>
             <td>${formatNumber(item.conversion_rate, 6)}</td>
           `;
@@ -234,10 +337,36 @@
     const select = document.getElementById("currency");
     if (select.options.length > 0) return;
     data.forEach((item) => {
+      const flag = currencyFlags[item.destination_currency] || "";
       const opt = document.createElement("option");
       opt.value = item.destination_currency;
-      opt.textContent = `${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}`;
+      opt.textContent = `${flag} ${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}`;
       select.appendChild(opt);
+    });
+    updateTaxSection();
+  }
+
+  function updateTaxSection() {
+    const currency = document.getElementById("currency").value;
+    const taxRow = document.getElementById("tax-row");
+    const regionSelect = document.getElementById("tax-region");
+    const regionLabel = document.getElementById("tax-region-label");
+    const config = taxRegions[currency];
+
+    if (!config) {
+      taxRow.classList.remove("visible");
+      document.getElementById("tax-enabled").checked = false;
+      return;
+    }
+
+    taxRow.classList.add("visible");
+    regionLabel.textContent = config.label;
+    regionSelect.innerHTML = "";
+    Object.keys(config.names).sort((a, b) => config.names[a].localeCompare(config.names[b], "is")).forEach((code) => {
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = `${config.names[code]} (${config.rates[code]}%)`;
+      regionSelect.appendChild(opt);
     });
   }
 
@@ -257,6 +386,21 @@
       return;
     }
 
+    function applyTax(destinationAmount) {
+      const config = taxRegions[currency];
+      const taxEnabled = document.getElementById("tax-enabled").checked;
+      if (!config || !taxEnabled) {
+        return `${formatNumber(amount, 0)} ISK = ${formatNumber(destinationAmount, 2)} ${currency}`;
+      }
+      const region = document.getElementById("tax-region").value;
+      const rate = config.rates[region] || 0;
+      const withTax = destinationAmount * (1 + rate / 100);
+      return `
+        <div class="pre-tax">Fyrir skatt: ${formatNumber(destinationAmount, 2)} ${currency}</div>
+        ${formatNumber(amount, 0)} ISK = ${formatNumber(withTax, 2)} ${currency} <span class="pre-tax">(m.v. ${rate}% skatt)</span>
+      `;
+    }
+
     try {
       if (API_BASE) {
         const response = await fetch(`${API_BASE}/fx/convert`, {
@@ -274,14 +418,14 @@
         }
 
         const data = await response.json();
-        resultEl.textContent = `${formatNumber(amount, 0)} ISK = ${formatNumber(data.destination_amount, 2)} ${data.destination_currency}`;
+        resultEl.innerHTML = applyTax(data.destination_amount);
       } else {
         const item = latestRates.find((r) => r.destination_currency === currency);
         if (!item || item.error || item.conversion_rate == null) {
           throw new Error("Gengi ekki tiltækt fyrir þennan gjaldmiðil");
         }
         const destinationAmount = amount * item.conversion_rate;
-        resultEl.textContent = `${formatNumber(amount, 0)} ISK = ${formatNumber(destinationAmount, 2)} ${currency}`;
+        resultEl.innerHTML = applyTax(destinationAmount);
       }
     } catch (err) {
       errorEl.textContent = `Villa við umreikning: ${err.message}`;
@@ -289,7 +433,12 @@
   }
 
   document.getElementById("amount").addEventListener("input", convert);
-  document.getElementById("currency").addEventListener("change", convert);
+  document.getElementById("currency").addEventListener("change", () => {
+    updateTaxSection();
+    convert();
+  });
+  document.getElementById("tax-enabled").addEventListener("change", convert);
+  document.getElementById("tax-region").addEventListener("change", convert);
 
   loadRatesTable().then(() => convert());
 </script>
