@@ -7,44 +7,16 @@ jobs:
   explore:
     runs-on: ubuntu-latest
     steps:
-      - name: List all endpoint paths and whether each needs auth
+      - name: Test Frankfurter API - latest rates with ISK as base
         run: |
-          curl -s "https://api.sedlabanki.is/dataportal/swagger/v1/swagger.json" -o /tmp/spec.json
-          python3 - << 'PYEOF'
-          import json
-          spec = json.load(open("/tmp/spec.json"))
-          paths = spec.get("paths", {})
-          print(f"Total endpoints: {len(paths)}\n")
-          for path, methods in paths.items():
-              for method, detail in methods.items():
-                  security = detail.get("security", spec.get("security", "NONE AT ROOT"))
-                  tags = detail.get("tags", [])
-                  summary = detail.get("summary", "")
-                  print(f"{method.upper():6} {path:60} tags={tags} security={security} :: {summary}")
-          PYEOF
+          echo "=== /v1/latest?base=ISK ==="
+          curl -s -w "\nHTTP %{http_code}\n" "https://api.frankfurter.dev/v1/latest?base=ISK&symbols=USD,EUR,GBP,DKK,NOK,SEK,CAD,JPY"
 
-      - name: Look for currency/exchange-rate related endpoints specifically
+      - name: Test Frankfurter API - ISK as a target symbol (USD base)
         run: |
-          python3 - << 'PYEOF'
-          import json
-          spec = json.load(open("/tmp/spec.json"))
-          paths = spec.get("paths", {})
-          keywords = ["currenc", "exchange", "rate", "gengi", "fx"]
-          for path, methods in paths.items():
-              if any(k in path.lower() for k in keywords):
-                  print("MATCH:", path)
-                  print(json.dumps(methods, indent=2)[:2000])
-                  print("---")
-          PYEOF
+          echo "=== /v1/latest?base=USD&symbols=ISK ==="
+          curl -s -w "\nHTTP %{http_code}\n" "https://api.frankfurter.dev/v1/latest?base=USD&symbols=ISK"
 
-      - name: Try calling a plausible public exchange-rate endpoint without auth
+      - name: List currencies
         run: |
-          for path in \
-            "https://api.sedlabanki.is/dataportal/v1/exchangerate" \
-            "https://api.sedlabanki.is/dataportal/exchangerate" \
-            "https://api.sedlabanki.is/dataportal/v1/currency"; do
-            echo "=== $path ==="
-            curl -s -o /tmp/r.json -w "HTTP %{http_code}\n" "$path" || true
-            head -c 500 /tmp/r.json 2>/dev/null
-            echo
-          done
+          curl -s -w "\nHTTP %{http_code}\n" "https://api.frankfurter.dev/v1/currencies"
