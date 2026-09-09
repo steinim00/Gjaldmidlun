@@ -6,10 +6,10 @@
 <title>Gjaldmiðlun – Gengi krónunnar</title>
 <style>
   :root {
-    --bg: #f5f6f8;
+    --bg: #eef2fb;
     --card-bg: #ffffff;
-    --text: #1d4ed8;
-    --muted: #3b5fcf;
+    --text: #1a1d23;
+    --muted: #5b6b8c;
     --accent: #1d4ed8;
     --border: #c9d6f7;
   }
@@ -28,6 +28,7 @@
   h1 {
     font-size: 1.6rem;
     margin-bottom: 0.25rem;
+    color: var(--accent);
   }
   p.subtitle {
     color: var(--muted);
@@ -44,6 +45,30 @@
   .card h2 {
     font-size: 1.1rem;
     margin-top: 0;
+  }
+  #reiknivel-card {
+    padding: 0.7rem;
+    background: var(--bg);
+    transition: background 0.4s ease;
+  }
+  #reiknivel-card .card-inner {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+  .direction-toggle {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .direction-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
   }
   table {
     width: 100%;
@@ -143,30 +168,42 @@
   <h1>Gjaldmiðlun</h1>
   <p class="subtitle">Gengi íslensku krónunnar (ISK) gagnvart helstu gjaldmiðlum, byggt á gengi Visa.</p>
 
-  <div class="card">
-    <h2>Reiknivél</h2>
-    <div class="converter-row">
-      <div class="field">
-        <label for="amount">Upphæð í ISK</label>
-        <input type="number" id="amount" value="1000" min="1" step="1">
+  <div class="card" id="reiknivel-card">
+    <div class="card-inner">
+      <h2>Reiknivél</h2>
+      <div class="direction-toggle">
+        <label>
+          <input type="radio" name="direction" value="forward" checked>
+          ISK ➜ gjaldmiðill
+        </label>
+        <label>
+          <input type="radio" name="direction" value="reverse">
+          Gjaldmiðill ➜ ISK
+        </label>
       </div>
-      <div class="field">
-        <label for="currency">Gjaldmiðill</label>
-        <select id="currency"></select>
+      <div class="converter-row">
+        <div class="field">
+          <label for="amount" id="amount-label">Upphæð í ISK</label>
+          <input type="number" id="amount" value="1000" min="1" step="1">
+        </div>
+        <div class="field">
+          <label for="currency">Gjaldmiðill</label>
+          <select id="currency"></select>
+        </div>
       </div>
+      <div id="tax-row" class="tax-row">
+        <div class="checkbox-field">
+          <input type="checkbox" id="tax-enabled">
+          <label for="tax-enabled">Bæta við sölu-/virðisaukaskatti</label>
+        </div>
+        <div class="field">
+          <label for="tax-region" id="tax-region-label">Fylki/hérað</label>
+          <select id="tax-region"></select>
+        </div>
+      </div>
+      <div id="convert-result" class="result"></div>
+      <div id="convert-error" class="error"></div>
     </div>
-    <div id="tax-row" class="tax-row">
-      <div class="checkbox-field">
-        <input type="checkbox" id="tax-enabled">
-        <label for="tax-enabled">Bæta við sölu-/virðisaukaskatti</label>
-      </div>
-      <div class="field">
-        <label for="tax-region" id="tax-region-label">Fylki/hérað</label>
-        <select id="tax-region"></select>
-      </div>
-    </div>
-    <div id="convert-result" class="result"></div>
-    <div id="convert-error" class="error"></div>
   </div>
 
   <div class="card">
@@ -215,6 +252,18 @@
     SEK: "🇸🇪",
     CAD: "🇨🇦",
     JPY: "🇯🇵",
+  };
+
+  // Flag-color gradients for the converter card frame, one per currency.
+  const currencyFlagGradients = {
+    USD: "linear-gradient(135deg, #B22234, #FFFFFF 50%, #3C3B6E)",
+    EUR: "linear-gradient(135deg, #003399, #FFCC00)",
+    GBP: "linear-gradient(135deg, #012169, #FFFFFF 50%, #C8102E)",
+    DKK: "linear-gradient(135deg, #C60C30, #FFFFFF)",
+    NOK: "linear-gradient(135deg, #EF2B2D, #FFFFFF 50%, #002868)",
+    SEK: "linear-gradient(135deg, #006AA7, #FECC00)",
+    CAD: "linear-gradient(135deg, #FF0000, #FFFFFF 50%, #FF0000)",
+    JPY: "linear-gradient(135deg, #FFFFFF, #BC002D)",
   };
 
   // Base state/province sales-tax rates (%). US rates are state-level only —
@@ -344,6 +393,27 @@
       select.appendChild(opt);
     });
     updateTaxSection();
+    updateCardBackground();
+    updateAmountLabel();
+  }
+
+  function updateCardBackground() {
+    const currency = document.getElementById("currency").value;
+    const card = document.getElementById("reiknivel-card");
+    card.style.background = currencyFlagGradients[currency] || "var(--bg)";
+  }
+
+  function getDirection() {
+    const checked = document.querySelector('input[name="direction"]:checked');
+    return checked ? checked.value : "forward";
+  }
+
+  function updateAmountLabel() {
+    const currency = document.getElementById("currency").value;
+    const label = document.getElementById("amount-label");
+    label.textContent = getDirection() === "reverse"
+      ? `Upphæð í ${currency}`
+      : "Upphæð í ISK";
   }
 
   function updateTaxSection() {
@@ -370,6 +440,28 @@
     });
   }
 
+  async function getRate(currency) {
+    if (API_BASE) {
+      const response = await fetch(`${API_BASE}/fx/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ destination_currency: currency, source_amount: 1 }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Villa (${response.status})`);
+      }
+      const data = await response.json();
+      return data.conversion_rate;
+    }
+
+    const item = latestRates.find((r) => r.destination_currency === currency);
+    if (!item || item.error || item.conversion_rate == null) {
+      throw new Error("Gengi ekki tiltækt fyrir þennan gjaldmiðil");
+    }
+    return item.conversion_rate;
+  }
+
   async function convert() {
     const amountInput = document.getElementById("amount");
     const currencySelect = document.getElementById("currency");
@@ -381,51 +473,45 @@
 
     const amount = parseFloat(amountInput.value);
     const currency = currencySelect.value;
+    const reverse = getDirection() === "reverse";
 
     if (!amount || amount <= 0 || !currency) {
       return;
     }
 
-    function applyTax(destinationAmount) {
-      const config = taxRegions[currency];
-      const taxEnabled = document.getElementById("tax-enabled").checked;
-      if (!config || !taxEnabled) {
-        return `${formatNumber(amount, 0)} ISK = ${formatNumber(destinationAmount, 2)} ${currency}`;
-      }
-      const region = document.getElementById("tax-region").value;
-      const rate = config.rates[region] || 0;
-      const withTax = destinationAmount * (1 + rate / 100);
-      return `
-        <div class="pre-tax">Fyrir skatt: ${formatNumber(destinationAmount, 2)} ${currency}</div>
-        ${formatNumber(amount, 0)} ISK = ${formatNumber(withTax, 2)} ${currency} <span class="pre-tax">(m.v. ${rate}% skatt)</span>
-      `;
-    }
+    const config = taxRegions[currency];
+    const taxEnabled = document.getElementById("tax-enabled").checked;
+    const region = document.getElementById("tax-region").value;
+    const taxApplies = Boolean(config && taxEnabled);
+    const taxRate = taxApplies ? (config.rates[region] || 0) : 0;
 
     try {
-      if (API_BASE) {
-        const response = await fetch(`${API_BASE}/fx/convert`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            destination_currency: currency,
-            source_amount: amount,
-          }),
-        });
+      const rate = await getRate(currency);
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.detail || `Villa (${response.status})`);
+      if (!reverse) {
+        // ISK -> gjaldmiðill; skattur (ef valinn) reiknast ofan á upphæðina í gjaldmiðlinum.
+        const destinationAmount = amount * rate;
+        if (!taxApplies) {
+          resultEl.textContent = `${formatNumber(amount, 0)} ISK = ${formatNumber(destinationAmount, 2)} ${currency}`;
+        } else {
+          const withTax = destinationAmount * (1 + taxRate / 100);
+          resultEl.innerHTML = `
+            <div class="pre-tax">Fyrir skatt: ${formatNumber(destinationAmount, 2)} ${currency}</div>
+            ${formatNumber(amount, 0)} ISK = ${formatNumber(withTax, 2)} ${currency} <span class="pre-tax">(m.v. ${taxRate}% skatt)</span>
+          `;
         }
-
-        const data = await response.json();
-        resultEl.innerHTML = applyTax(data.destination_amount);
       } else {
-        const item = latestRates.find((r) => r.destination_currency === currency);
-        if (!item || item.error || item.conversion_rate == null) {
-          throw new Error("Gengi ekki tiltækt fyrir þennan gjaldmiðil");
+        // Gjaldmiðill -> ISK; skattur (ef valinn) leggst á upphæðina í gjaldmiðlinum áður en umreiknað er í ISK.
+        const withTax = amount * (1 + taxRate / 100);
+        const iskAmount = withTax / rate;
+        if (!taxApplies) {
+          resultEl.textContent = `${formatNumber(amount, 2)} ${currency} = ${formatNumber(iskAmount, 0)} ISK`;
+        } else {
+          resultEl.innerHTML = `
+            <div class="pre-tax">Upphæð með skatti: ${formatNumber(withTax, 2)} ${currency} <span class="pre-tax">(m.v. ${taxRate}% skatt)</span></div>
+            ${formatNumber(amount, 2)} ${currency} = ${formatNumber(iskAmount, 0)} ISK
+          `;
         }
-        const destinationAmount = amount * item.conversion_rate;
-        resultEl.innerHTML = applyTax(destinationAmount);
       }
     } catch (err) {
       errorEl.textContent = `Villa við umreikning: ${err.message}`;
@@ -435,10 +521,18 @@
   document.getElementById("amount").addEventListener("input", convert);
   document.getElementById("currency").addEventListener("change", () => {
     updateTaxSection();
+    updateCardBackground();
+    updateAmountLabel();
     convert();
   });
   document.getElementById("tax-enabled").addEventListener("change", convert);
   document.getElementById("tax-region").addEventListener("change", convert);
+  document.querySelectorAll('input[name="direction"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      updateAmountLabel();
+      convert();
+    });
+  });
 
   loadRatesTable().then(() => convert());
 </script>
