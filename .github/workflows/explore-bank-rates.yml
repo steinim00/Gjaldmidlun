@@ -1,0 +1,39 @@
+name: Explore Icelandic bank rate sources (temporary)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  explore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Landsbankinn currency page - look for API calls / JSON endpoints
+        run: |
+          curl -s -A "Mozilla/5.0" "https://www.landsbankinn.is/markadir/gjaldmidlar" -o /tmp/lb.html -w "HTTP %{http_code}\n"
+          echo "--- occurrences of api/json/fetch patterns ---"
+          grep -o -E "(https?://[a-zA-Z0-9./_-]*api[a-zA-Z0-9./_-]*)" /tmp/lb.html | sort -u | head -30 || true
+          grep -o -E "(/[a-zA-Z0-9._-]*gengi[a-zA-Z0-9./_-]*)" /tmp/lb.html | sort -u | head -30 || true
+          echo "--- page size ---"
+          wc -c /tmp/lb.html
+
+      - name: Try Landsbankinn common data endpoints
+        run: |
+          for path in \
+            "https://www.landsbankinn.is/api/currency" \
+            "https://www.landsbankinn.is/umbraco/api/currency/rates" \
+            "https://www.landsbankinn.is/en/markets/currency"; do
+            echo "=== $path ==="
+            curl -s -A "Mozilla/5.0" -o /tmp/r.json -w "HTTP %{http_code}\n" "$path" || true
+            head -c 500 /tmp/r.json
+            echo
+          done
+
+      - name: Islandsbanki Opinn API - look for docs on exchange rate coverage
+        run: |
+          curl -s -A "Mozilla/5.0" "https://www.islandsbanki.is/is/grein/opinn-api" -o /tmp/ib.html -w "HTTP %{http_code}\n"
+          grep -o -E "(https?://[a-zA-Z0-9./_-]*api[a-zA-Z0-9./_-]*)" /tmp/ib.html | sort -u | head -30 || true
+
+      - name: Arion banki currency page - look for API calls
+        run: |
+          curl -s -A "Mozilla/5.0" "https://www.arionbanki.is/en/bank/data/currency" -o /tmp/ar.html -w "HTTP %{http_code}\n"
+          grep -o -E "(https?://[a-zA-Z0-9./_-]*api[a-zA-Z0-9./_-]*)" /tmp/ar.html | sort -u | head -30 || true
