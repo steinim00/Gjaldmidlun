@@ -217,12 +217,7 @@
           <input type="number" id="margin-percent" value="2" min="0" max="20" step="0.1">
         </div>
       </div>
-      <p class="margin-hint">
-        2% er einungis dæmi til að byrja með – þessi tala er ekki opinber
-        og er ekki sótt frá neinum banka. Farðu inn á gengissíðu þíns
-        banka og settu inn þann mismun sem þú sérð milli kaup- og
-        sölugengis til að fá raunhæfari niðurstöðu.
-      </p>
+      <p class="margin-hint" id="margin-hint"></p>
       <div id="convert-result" class="result"></div>
       <div id="convert-error" class="error"></div>
     </div>
@@ -338,6 +333,24 @@
     },
   };
 
+  // Real "% Mark-up over European Central Bank Rate" values read directly
+  // from Visa's own public consumer exchange rate calculator
+  // (usa.visa.com/support/consumer/travel-support/exchange-rate-calculator.html)
+  // on the date below, with Bank fee left at 0%. This is a manually-checked
+  // snapshot, not a live feed - Visa's markup varies by currency pair and
+  // can change over time. Currencies not listed here fall back to a
+  // generic placeholder (see marginHintText below).
+  const visaMarkupSnapshot = {
+    checkedOn: "9. september 2026",
+    values: {
+      USD: 0.03,
+      CAD: 0.38,
+      EUR: 1.24,
+      JPY: 1.98,
+    },
+  };
+  const DEFAULT_MARGIN_PLACEHOLDER = 2;
+
   let latestRates = [];
 
   function formatNumber(value, digits) {
@@ -419,6 +432,22 @@
     updateTaxSection();
     updateCardBackground();
     updateAmountLabel();
+    updateMarginSection();
+  }
+
+  function updateMarginSection() {
+    const currency = document.getElementById("currency").value;
+    const input = document.getElementById("margin-percent");
+    const hint = document.getElementById("margin-hint");
+    const knownValue = visaMarkupSnapshot.values[currency];
+
+    if (knownValue != null) {
+      input.value = knownValue;
+      hint.textContent = `${knownValue}% er raunveruleg "% Mark-up over European Central Bank Rate" fyrir ${currency} samkvæmt Visa's eigin reiknivél (usa.visa.com), skoðað ${visaMarkupSnapshot.checkedOn}. Þetta er ekki lifandi gagnastreymi og getur breyst — sláðu inn nýrri tölu ef þú athugar hana sjálf/ur.`;
+    } else {
+      input.value = DEFAULT_MARGIN_PLACEHOLDER;
+      hint.textContent = `${DEFAULT_MARGIN_PLACEHOLDER}% er einungis dæmi til að byrja með – þessi tala er ekki opinber og er ekki sótt frá Visa eða neinum banka fyrir ${currency}. Farðu inn á Visa's reiknivél (usa.visa.com/support/consumer/travel-support/exchange-rate-calculator.html) eða gengissíðu þíns banka og settu inn raunverulega tölu.`;
+    }
   }
 
   function updateCardBackground() {
@@ -567,6 +596,7 @@
     updateTaxSection();
     updateCardBackground();
     updateAmountLabel();
+    updateMarginSection();
     convert();
   });
   document.getElementById("tax-enabled").addEventListener("change", convert);
