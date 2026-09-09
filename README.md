@@ -149,22 +149,32 @@ lausn:
   gengi með `scripts/fetch_rates.py` og býr til `frontend/rates.json`.
 - Forsíðan les sjálfkrafa úr `rates.json` þegar `window.API_BASE_URL` er
   ekki stillt, og reiknar umreikninga í vafranum út frá vistuðu gengi.
-  Þannig þarf enginn lifandi bakendi að keyra fyrir Pages-útgáfuna, og
-  Visa-lyklarnir fara aldrei í vafra notandans.
+  Þannig þarf enginn lifandi bakendi að keyra fyrir Pages-útgáfuna.
 - Þegar `API_BASE_URL` er stillt (t.d. með sjálfhýstum bakenda) notar
   síðan þess í stað `GET /fx/all` og `POST /fx/convert` í rauntíma, eins og
   lýst er hér að ofan.
 
+`scripts/fetch_rates.py` sækir gengi frá
+[Frankfurter](https://frankfurter.dev) (byggt á daglegu viðmiðunargengi
+Seðlabanka Evrópu) – ekki frá Visa. Ástæðan er einföld: Visa úthlutar
+aðeins raunverulegu gengi eftir samþykki fyrir framleiðsluaðgang (sjá
+kaflann um Two-Way SSL hér að ofan), en `sandbox`-umhverfið skilar
+gögnum sem eru ekki einu sinni innbyrðis samkvæm (sjá nánar í git-sögu
+verkefnisins). Frankfurter er opið, lyklalaust API sem gefur raunverulegt,
+samkvæmt gengi – betri kostur fyrir kyrrstæðu Pages-útgáfuna, sem er ætluð
+til að gefa notendum rétta mynd af gengi. Bakendinn (FastAPI) er
+áfram tengdur við Visa fyrir þá sem hýsa hann sjálfir með samþykktan
+framleiðsluaðgang.
+
 ### Uppsetning
 
-1. Í `Settings → Secrets and variables → Actions` fyrir GitHub-safnið skal
-   bæta við leynilyklunum `VISA_USER_ID`, `VISA_PASSWORD`, `VISA_BASE_URL`,
-   og `VISA_CLIENT_CERT` / `VISA_CLIENT_KEY` (innihald `visa_cert.pem` og
-   `visa_private_key.pem`, límt inn sem margra-lína leynilykill).
-2. Í `Settings → Pages` skal velja **Source: GitHub Actions**.
-3. Keyra vinnuferlið handvirkt í fyrsta sinn (`Actions → Deploy Pages → Run
+1. Í `Settings → Pages` skal velja **Source: GitHub Actions**.
+2. Keyra vinnuferlið handvirkt í fyrsta sinn (`Actions → Deploy Pages → Run
    workflow`), eða einfaldlega `push`-a á `main` – þá keyrir það sjálfkrafa.
-4. Síðan birtist á slóðinni sem GitHub Pages úthlutar safninu.
+3. Síðan birtist á slóðinni sem GitHub Pages úthlutar safninu.
+
+Engir leynilyklar (secrets) eru nauðsynlegir fyrir þessa útgáfu, enda
+kallar `fetch_rates.py` ekki á Visa.
 
 ## Umhverfisbreytur
 
