@@ -40,16 +40,6 @@ jobs:
           printf '%s' "${{ secrets.VISA_CLIENT_CERT }}" > certs/visa_cert.pem
           printf '%s' "${{ secrets.VISA_CLIENT_KEY }}" > certs/visa_private_key.pem
 
-      - name: Validate certificate files (diagnostic, no secret content printed)
-        run: |
-          echo "cert file bytes: $(wc -c < certs/visa_cert.pem)"
-          echo "key file bytes: $(wc -c < certs/visa_private_key.pem)"
-          grep -q "BEGIN CERTIFICATE" certs/visa_cert.pem && echo "cert header: OK" || echo "cert header: MISSING"
-          grep -qE "BEGIN (RSA )?PRIVATE KEY" certs/visa_private_key.pem && echo "key header: OK" || echo "key header: MISSING"
-          openssl x509 -in certs/visa_cert.pem -noout -subject -dates || echo "cert failed to parse with openssl"
-          openssl pkey -in certs/visa_private_key.pem -noout && echo "key parsed OK with openssl" || echo "key failed to parse with openssl"
-          echo "VISA_BASE_URL is set: $([ -n \"${{ secrets.VISA_BASE_URL }}\" ] && echo yes || echo no)"
-
       - name: Fetch latest FX rates
         run: python scripts/fetch_rates.py
         env:
@@ -59,11 +49,10 @@ jobs:
           VISA_CLIENT_KEY_PATH: certs/visa_private_key.pem
           VISA_BASE_URL: ${{ secrets.VISA_BASE_URL }}
 
-      - name: Show fetched rates (diagnostic, no secrets — just currency data)
-        run: cat frontend/rates.json
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
