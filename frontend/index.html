@@ -207,15 +207,14 @@
   </div>
 
   <div class="card">
-    <h2>Gengistafla (1.000 ISK)</h2>
+    <h2>Gengistafla</h2>
     <div id="table-status" class="status">Sæki gengi...</div>
     <div id="table-updated" class="status" style="display:none;"></div>
     <table id="rates-table" style="display:none;">
       <thead>
         <tr>
           <th>Gjaldmiðill</th>
-          <th>Þú færð fyrir 1.000 ISK</th>
-          <th>Gengi</th>
+          <th>1 eining kostar</th>
         </tr>
       </thead>
       <tbody id="rates-body"></tbody>
@@ -359,16 +358,19 @@
       data.forEach((item) => {
         const flag = currencyFlags[item.destination_currency] || "";
         const row = document.createElement("tr");
-        if (item.error) {
+        if (item.error || !item.conversion_rate) {
           row.innerHTML = `
             <td><span class="flag">${flag}</span>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
-            <td colspan="2" class="error">Ekki tókst að sækja gengi</td>
+            <td class="error">Ekki tókst að sækja gengi</td>
           `;
         } else {
+          // Verðgengi eins og það er venjulega birt á Íslandi: hvað kostar
+          // 1 eining af gjaldmiðlinum í ISK (öfugt við hráa API-gengið, sem
+          // gefur gjaldmiðil á móti 1 ISK).
+          const iskPerUnit = 1 / item.conversion_rate;
           row.innerHTML = `
             <td><span class="flag">${flag}</span>${item.destination_currency} – ${currencyNames[item.destination_currency] || ""}</td>
-            <td>${formatNumber(item.destination_amount, 2)}</td>
-            <td>${formatNumber(item.conversion_rate, 6)}</td>
+            <td>${formatNumber(iskPerUnit, 2)} ISK</td>
           `;
         }
         bodyEl.appendChild(row);
