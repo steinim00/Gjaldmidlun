@@ -14,7 +14,10 @@ VISA_CLIENT_CERT_PATH = os.environ.get("VISA_CLIENT_CERT_PATH", "certs/visa_cert
 VISA_CLIENT_KEY_PATH = os.environ.get(
     "VISA_CLIENT_KEY_PATH", "certs/visa_private_key.pem"
 )
-VISA_BASE_URL = os.environ.get("VISA_BASE_URL", "https://sandbox.api.visa.com")
+# `or` (not a `.get()` default) so an env var that's present but set to an
+# empty string — e.g. a CI secret that's unset — still falls back to the
+# sandbox URL, instead of producing a schemeless, unusable base URL.
+VISA_BASE_URL = os.environ.get("VISA_BASE_URL") or "https://sandbox.api.visa.com"
 
 FOREX_RESOURCE_PATH = "/forexrates/v2/foreignexchangerates"
 
