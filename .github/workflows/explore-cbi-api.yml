@@ -7,19 +7,44 @@ jobs:
   explore:
     runs-on: ubuntu-latest
     steps:
-      - name: Try common Swagger spec paths
+      - name: List all endpoint paths and whether each needs auth
+        run: |
+          curl -s "https://api.sedlabanki.is/dataportal/swagger/v1/swagger.json" -o /tmp/spec.json
+          python3 - << 'PYEOF'
+          import json
+          spec = json.load(open("/tmp/spec.json"))
+          paths = spec.get("paths", {})
+          print(f"Total endpoints: {len(paths)}\n")
+          for path, methods in paths.items():
+              for method, detail in methods.items():
+                  security = detail.get("security", spec.get("security", "NONE AT ROOT"))
+                  tags = detail.get("tags", [])
+                  summary = detail.get("summary", "")
+                  print(f"{method.upper():6} {path:60} tags={tags} security={security} :: {summary}")
+          PYEOF
+
+      - name: Look for currency/exchange-rate related endpoints specifically
+        run: |
+          python3 - << 'PYEOF'
+          import json
+          spec = json.load(open("/tmp/spec.json"))
+          paths = spec.get("paths", {})
+          keywords = ["currenc", "exchange", "rate", "gengi", "fx"]
+          for path, methods in paths.items():
+              if any(k in path.lower() for k in keywords):
+                  print("MATCH:", path)
+                  print(json.dumps(methods, indent=2)[:2000])
+                  print("---")
+          PYEOF
+
+      - name: Try calling a plausible public exchange-rate endpoint without auth
         run: |
           for path in \
-            "https://api.sedlabanki.is/dataportal/swagger/v1/swagger.json" \
-            "https://api.sedlabanki.is/dataportal/swagger.json" \
-            "https://api.sedlabanki.is/swagger/v1/swagger.json"; do
+            "https://api.sedlabanki.is/dataportal/v1/exchangerate" \
+            "https://api.sedlabanki.is/dataportal/exchangerate" \
+            "https://api.sedlabanki.is/dataportal/v1/currency"; do
             echo "=== $path ==="
-            curl -s -o /tmp/resp.json -w "HTTP %{http_code}\n" "$path" || true
-            head -c 3000 /tmp/resp.json 2>/dev/null
-            echo
+            curl -s -o /tmp/r.json -w "HTTP %{http_code}\n" "$path" || true
+            head -c 500 /tmp/r.json 2>/dev/null
             echo
           done
-
-      - name: Fetch Swagger UI index for configUrl hint
-        run: |
-          curl -s "https://api.sedlabanki.is/dataportal/swagger/index.html" | grep -i -E "swagger.json|configUrl|url:" | head -20 || true
