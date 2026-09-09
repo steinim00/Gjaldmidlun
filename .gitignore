@@ -11,3 +11,4 @@ venv/
 # Generated locally by scripts/fetch_rates.py; the Pages deploy workflow
 # regenerates this at build time, it is not committed.
 frontend/rates.json
+certs/

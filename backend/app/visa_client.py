@@ -1,17 +1,22 @@
-"""Thin client for Visa's Foreign Exchange Rates API."""
-import json
-from urllib.parse import urlencode
+"""Thin client for Visa's Foreign Exchange Rates API.
+
+Per Visa's own docs (developer.visa.com/capabilities/foreign_exchange/docs-authentication),
+this API uses Two-Way SSL (mutual TLS) plus HTTP Basic Authentication with a
+username/password issued alongside the client certificate — not X-Pay Token.
+"""
+from pathlib import Path
 
 import httpx
 
 from .config import (
     FOREX_RESOURCE_PATH,
     ISK_CODE,
-    VISA_API_KEY,
     VISA_BASE_URL,
-    VISA_SHARED_SECRET,
+    VISA_CLIENT_CERT_PATH,
+    VISA_CLIENT_KEY_PATH,
+    VISA_PASSWORD,
+    VISA_USER_ID,
 )
-from .xpay import generate_xpay_token
 
 
 class VisaConfigError(RuntimeError):
@@ -25,6 +30,15 @@ class VisaApiError(RuntimeError):
         self.detail = detail
 
 
+def _format_source_amount(source_amount: float) -> str:
+    """Format the request's sourceAmount per Visa's API schema (a decimal string).
+
+    ISK has zero minor currency units (ISO 4217 exponent 0), so the amount is
+    sent with no decimal point, e.g. "1000" rather than "1000.00".
+    """
+    return str(int(round(source_amount)))
+
+
 async def get_forex_rate(
     destination_currency_code: str,
     source_amount: float,
@@ -34,40 +48,34 @@ async def get_forex_rate(
 
     ISK is always the source currency, per this service's scope.
     """
-    if not VISA_API_KEY or not VISA_SHARED_SECRET:
-        raise VisaConfigError(
-            "VISA_API_KEY and VISA_SHARED_SECRET must be set in the environment"
-        )
+    if not VISA_USER_ID or not VISA_PASSWORD:
+        raise VisaConfigError("VISA_USER_ID and VISA_PASSWORD must be set in the environment")
 
-    query_params = {"apiKey": VISA_API_KEY}
-    query_string = "?" + urlencode(query_params)
+    if not Path(VISA_CLIENT_CERT_PATH).is_file() or not Path(VISA_CLIENT_KEY_PATH).is_file():
+        raise VisaConfigError(
+            "Visa client certificate/key not found at "
+            f"{VISA_CLIENT_CERT_PATH} / {VISA_CLIENT_KEY_PATH}"
+        )
 
     payload = {
         "destinationCurrencyCode": destination_currency_code,
         "sourceCurrencyCode": ISK_CODE,
-        "sourceAmount": source_amount,
+        "sourceAmount": _format_source_amount(source_amount),
         "rateProductCode": rate_product_code,
     }
-    body = json.dumps(payload, separators=(",", ":"))
 
-    xpay_token = generate_xpay_token(
-        shared_secret=VISA_SHARED_SECRET,
-        resource_path=FOREX_RESOURCE_PATH,
-        query_string=query_string,
-        body=body,
-    )
-
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "x-pay-token": xpay_token,
-    }
-
-    url = f"{VISA_BASE_URL}{FOREX_RESOURCE_PATH}{query_string}"
+    url = f"{VISA_BASE_URL}{FOREX_RESOURCE_PATH}"
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(url, content=body, headers=headers)
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            cert=(VISA_CLIENT_CERT_PATH, VISA_CLIENT_KEY_PATH),
+        ) as client:
+            response = await client.post(
+                url,
+                json=payload,
+                auth=(VISA_USER_ID, VISA_PASSWORD),
+            )
     except httpx.HTTPError as exc:
         raise VisaApiError(502, f"Could not reach Visa API: {exc}") from exc
 

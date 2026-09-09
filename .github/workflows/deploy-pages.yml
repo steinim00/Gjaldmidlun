@@ -34,11 +34,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Write Visa client certificate
+        run: |
+          mkdir -p certs
+          printf '%s' "${{ secrets.VISA_CLIENT_CERT }}" > certs/visa_cert.pem
+          printf '%s' "${{ secrets.VISA_CLIENT_KEY }}" > certs/visa_private_key.pem
+
       - name: Fetch latest FX rates
         run: python scripts/fetch_rates.py
         env:
-          VISA_API_KEY: ${{ secrets.VISA_API_KEY }}
-          VISA_SHARED_SECRET: ${{ secrets.VISA_SHARED_SECRET }}
+          VISA_USER_ID: ${{ secrets.VISA_USER_ID }}
+          VISA_PASSWORD: ${{ secrets.VISA_PASSWORD }}
+          VISA_CLIENT_CERT_PATH: certs/visa_cert.pem
+          VISA_CLIENT_KEY_PATH: certs/visa_private_key.pem
           VISA_BASE_URL: ${{ secrets.VISA_BASE_URL }}
 
       - name: Setup Pages
